@@ -2,10 +2,16 @@
 
 namespace App\Models;
 
+use App\Enums\UserStatus;
+use Illuminate\Support\Carbon;
+
 class TelegramAccount extends HortonModel
 {
     protected $casts = [
         'last_seen_at' => 'datetime',
+        'registered_at' => 'datetime',
+        'activated_at' => 'datetime',
+        'deactivated_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -83,5 +89,61 @@ class TelegramAccount extends HortonModel
     public function broadcastRecipients()
     {
         return $this->hasMany(BroadcastRecipient::class);
+    }
+
+    public function isRegistered(): bool
+    {
+        return ($this->registration_status ?? 'pending') === 'registered';
+    }
+
+    public function isActive(): bool
+    {
+        return (bool) ($this->is_active ?? false)
+            && $this->registration_status === 'active';
+    }
+
+    public function canUseBot(): bool
+    {
+        return $this->isActive();
+    }
+
+    public function markRegistered(?Carbon $at = null): void
+    {
+        $at ??= now();
+
+        $this->forceFill([
+            'registration_status' => 'registered',
+            'registered_at' => $this->registered_at ?? $at,
+        ])->save();
+    }
+
+    public function activate(?Carbon $at = null): void
+    {
+        $at ??= now();
+
+        $this->forceFill([
+            'registration_status' => 'active',
+            'is_active' => true,
+            'activated_at' => $this->activated_at ?? $at,
+            'deactivated_at' => null,
+        ])->save();
+    }
+
+    public function deactivate(?Carbon $at = null): void
+    {
+        $at ??= now();
+
+        $this->forceFill([
+            'registration_status' => 'inactive',
+            'is_active' => false,
+            'deactivated_at' => $at,
+        ])->save();
+    }
+
+    public function status(): UserStatus
+    {
+        return ($this->is_active ?? false)
+            ? UserStatus::Active
+            : UserStatus::Inactive;
     }
 }
