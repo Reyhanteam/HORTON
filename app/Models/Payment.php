@@ -11,9 +11,9 @@ class Payment extends HortonModel
         return $this->belongsTo(Order::class);
     }
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function attempts()
