@@ -25,6 +25,10 @@ return new class extends Migration
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         try {
             foreach ($tables as [$table, $statement]) {
+                if (strtolower($table) === 'migrations') {
+                    continue;
+                }
+
                 DB::unprepared($this->transform($table, $statement));
             }
         } finally {
