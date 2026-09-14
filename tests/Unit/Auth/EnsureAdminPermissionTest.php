@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureAdminPermission;
 use Illuminate\Http\Request;
 use Mockery;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 final class EnsureAdminPermissionTest extends TestCase
@@ -28,7 +29,7 @@ final class EnsureAdminPermissionTest extends TestCase
 
         $middleware = new EnsureAdminPermission();
 
-        $this->expectException(Response::class);
+        $this->expectException(HttpException::class);
 
         $middleware->handle($request, fn () => new Response('ok'), 'users.view');
     }
