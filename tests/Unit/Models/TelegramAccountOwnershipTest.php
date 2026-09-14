@@ -18,7 +18,7 @@ use App\Models\TelegramAccount;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class TelegramAccountOwnershipTest extends TestCase
 {
