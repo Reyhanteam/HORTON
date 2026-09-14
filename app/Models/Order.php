@@ -6,9 +6,9 @@ class Order extends HortonModel
 {
     protected $casts = ['subtotal' => 'integer', 'discount_amount' => 'integer', 'total' => 'integer', 'metadata' => 'array', 'paid_at' => 'datetime', 'created_at' => 'datetime', 'updated_at' => 'datetime'];
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function items()
