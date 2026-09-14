@@ -11,8 +11,8 @@ class BroadcastRecipient extends HortonModel
         return $this->belongsTo(Broadcast::class);
     }
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 }
