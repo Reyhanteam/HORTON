@@ -8,7 +8,7 @@ use App\Models\Service;
 use App\Models\ServiceProvider;
 use App\Models\ServiceProviderAccount;
 use App\Models\ServiceOperation;
-use App\Models\User;
+use App\Models\TelegramAccount;
 use Tests\TestCase;
 
 final class DomainModelTest extends TestCase
@@ -17,7 +17,7 @@ final class DomainModelTest extends TestCase
     {
         $order = new Order();
 
-        self::assertSame(User::class, $order->user()->getRelated()::class);
+        self::assertSame(TelegramAccount::class, $order->telegramAccount()->getRelated()::class);
         self::assertSame(OrderItem::class, $order->items()->getRelated()::class);
         self::assertSame(Service::class, $order->services()->getRelated()::class);
     }
@@ -26,7 +26,7 @@ final class DomainModelTest extends TestCase
     {
         $service = new Service();
 
-        self::assertSame(User::class, $service->user()->getRelated()::class);
+        self::assertSame(TelegramAccount::class, $service->telegramAccount()->getRelated()::class);
         self::assertSame(Order::class, $service->order()->getRelated()::class);
         self::assertSame(OrderItem::class, $service->orderItem()->getRelated()::class);
         self::assertSame(ServiceProvider::class, $service->provider()->getRelated()::class);
