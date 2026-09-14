@@ -6,9 +6,9 @@ class Service extends HortonModel
 {
     protected $casts = ['capacity' => 'integer', 'starts_at' => 'datetime', 'expires_at' => 'datetime', 'metadata' => 'array'];
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function order()
