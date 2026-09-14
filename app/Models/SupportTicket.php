@@ -6,9 +6,9 @@ class SupportTicket extends HortonModel
 {
     protected $casts = ['last_replied_at' => 'datetime', 'closed_at' => 'datetime'];
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function department()
