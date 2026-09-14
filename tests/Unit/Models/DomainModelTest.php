@@ -9,7 +9,7 @@ use App\Models\ServiceProvider;
 use App\Models\ServiceProviderAccount;
 use App\Models\ServiceOperation;
 use App\Models\User;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 final class DomainModelTest extends TestCase
 {
