@@ -17,13 +17,14 @@ return new class extends Migration
             throw new RuntimeException('HORTON schema source is empty: horton.sql');
         }
 
+        $tables = $this->extractCreateTables($sql);
+        if (count($tables) !== 57) {
+            throw new RuntimeException('Expected 57 HORTON tables, found '.count($tables).'.');
+        }
+
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         try {
-            foreach ($this->extractCreateTables($sql) as [$table, $statement]) {
-                if ($table === 'migrations') {
-                    continue;
-                }
-
+            foreach ($tables as [$table, $statement]) {
                 DB::unprepared($this->transform($table, $statement));
             }
         } finally {
@@ -47,8 +48,59 @@ return new class extends Migration
 
     private function extractCreateTables(string $sql): array
     {
-        preg_match_all('/CREATE TABLE `([^`]+)`\\s*\\(.*?\\)\\s*ENGINE=.*?;/s', $sql, $matches, PREG_SET_ORDER);
-        return array_map(static fn (array $m) => [$m[1], $m[0]], $matches);
+        $pattern = '/CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`([^`]+)`\\s*\\(/i';
+        preg_match_all($pattern, $sql, $matches, PREG_OFFSET_CAPTURE);
+
+        $tables = [];
+        foreach ($matches[1] as $index => $match) {
+            $table = $match[0];
+            $start = $matches[0][$index][1];
+            $semicolon = $this->findStatementEnd($sql, $start);
+            if ($semicolon === null) {
+                throw new RuntimeException("Could not parse CREATE TABLE for {$table}.");
+            }
+
+            $tables[] = [$table, substr($sql, $start, $semicolon - $start + 1)];
+        }
+
+        return $tables;
+    }
+
+    private function findStatementEnd(string $sql, int $start): ?int
+    {
+        $length = strlen($sql);
+        $quote = null;
+        $escaped = false;
+
+        for ($i = $start; $i < $length; $i++) {
+            $char = $sql[$i];
+
+            if ($quote !== null) {
+                if ($escaped) {
+                    $escaped = false;
+                    continue;
+                }
+                if ($char === '\\\\') {
+                    $escaped = true;
+                    continue;
+                }
+                if ($char === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($char === "'" || $char === '"' || $char === '`') {
+                $quote = $char;
+                continue;
+            }
+
+            if ($char === ';') {
+                return $i;
+            }
+        }
+
+        return null;
     }
 
     private function transform(string $table, string $sql): string
@@ -62,11 +114,13 @@ return new class extends Migration
 
         if (in_array($table, $owners, true)) {
             $sql = str_replace('`user_id`', '`telegram_account_id`', $sql);
+            $sql = preg_replace('/REFERENCES\\s+`users`/i', 'REFERENCES `telegram_accounts`', $sql) ?? $sql;
         }
 
         if ($table === 'referrals') {
             $sql = str_replace('`referrer_user_id`', '`referrer_telegram_account_id`', $sql);
             $sql = str_replace('`referred_user_id`', '`referred_telegram_account_id`', $sql);
+            $sql = preg_replace('/REFERENCES\\s+`users`/i', 'REFERENCES `telegram_accounts`', $sql) ?? $sql;
         }
 
         if ($table === 'telegram_accounts') {
