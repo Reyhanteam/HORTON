@@ -4,7 +4,7 @@ namespace App\Models;
 
 class ServiceProviderAccount extends HortonModel
 {
-    protected $casts = ['credentials' => 'encrypted:array', 'configuration' => 'array', 'priority' => 'integer', 'is_active' => 'boolean', 'last_health_check_at' => 'datetime'];
+    protected $casts = ['metadata' => 'array', 'priority' => 'integer'];
 
     public function provider()
     {
@@ -13,11 +13,11 @@ class ServiceProviderAccount extends HortonModel
 
     public function services()
     {
-        return $this->hasMany(Service::class, 'service_provider_account_id');
+        return $this->hasMany(Service::class, 'provider_account_id');
     }
 
     public function operations()
     {
-        return $this->hasMany(ServiceOperation::class, 'service_provider_account_id');
+        return $this->hasMany(ServiceOperation::class, 'provider_account_id');
     }
 }
