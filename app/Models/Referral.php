@@ -8,11 +8,11 @@ class Referral extends HortonModel
 
     public function referrer()
     {
-        return $this->belongsTo(User::class, 'referrer_user_id');
+        return $this->belongsTo(TelegramAccount::class, 'referrer_telegram_account_id');
     }
 
     public function referred()
     {
-        return $this->belongsTo(User::class, 'referred_user_id');
+        return $this->belongsTo(TelegramAccount::class, 'referred_telegram_account_id');
     }
 }
