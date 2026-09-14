@@ -11,8 +11,8 @@ class WalletTransaction extends HortonModel
         return $this->belongsTo(Wallet::class);
     }
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 }
