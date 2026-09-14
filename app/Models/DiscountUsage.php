@@ -11,9 +11,9 @@ class DiscountUsage extends HortonModel
         return $this->belongsTo(DiscountCode::class);
     }
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function order()
