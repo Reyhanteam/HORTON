@@ -6,9 +6,9 @@ class CashbackAccount extends HortonModel
 {
     protected $casts = ['balance' => 'integer'];
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 
     public function transactions()
