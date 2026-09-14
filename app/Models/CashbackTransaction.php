@@ -11,8 +11,8 @@ class CashbackTransaction extends HortonModel
         return $this->belongsTo(CashbackAccount::class, 'cashback_account_id');
     }
 
-    public function user()
+    public function telegramAccount()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(TelegramAccount::class, 'telegram_account_id');
     }
 }
