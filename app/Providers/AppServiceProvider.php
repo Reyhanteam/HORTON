@@ -15,8 +15,10 @@ use App\Events\UserRegistered;
 use App\Listeners\DispatchProvisionPaidOrder;
 use App\Listeners\InitializeUserAccount;
 use App\Models\BotSetting;
+use App\Models\ServiceProviderAccount;
 use App\Models\User;
 use App\Policies\BotSettingPolicy;
+use App\Policies\SanaeiServerPolicy;
 use App\Policies\UserPolicy;
 use App\Services\CatalogPricingService;
 use App\Services\DiscountCalculator;
@@ -44,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(BotSetting::class, BotSettingPolicy::class);
+        Gate::policy(ServiceProviderAccount::class, SanaeiServerPolicy::class);
         Gate::before(function (User $user): ?bool { return $user->hasRole('super-admin') ? true : null; });
         Gate::define('admin.access', fn (User $user): bool => $user->canAccessDashboard());
         Gate::define('admin.permission', fn (User $user, string $permission): bool => $user->isActive() && $user->hasPermission($permission));
