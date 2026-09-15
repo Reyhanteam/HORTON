@@ -12,6 +12,7 @@ return new class extends Migration
         Schema::disableForeignKeyConstraints();
 
         try {
+            $this->moveRoleOwnershipToUsers();
             $this->moveAuditLogOwnershipToUsers();
             Schema::dropIfExists('admin_users');
         } finally {
@@ -32,25 +33,25 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        if (! Schema::hasTable('audit_logs') || ! Schema::hasColumn('audit_logs', 'user_id')) {
+        if (Schema::hasTable('role_user') && Schema::hasColumn('role_user', 'user_id')) {
+            $this->dropForeignKeys('role_user', 'user_id', 'users');
+            DB::statement('ALTER TABLE `role_user` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NOT NULL');
+        }
+
+        if (Schema::hasTable('audit_logs') && Schema::hasColumn('audit_logs', 'user_id')) {
+            $this->dropForeignKeys('audit_logs', 'user_id', 'users');
+            DB::statement('ALTER TABLE `audit_logs` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NULL');
+        }
+    }
+
+    private function moveRoleOwnershipToUsers(): void
+    {
+        if (! Schema::hasTable('role_user') || ! Schema::hasColumn('role_user', 'admin_user_id')) {
             return;
         }
 
-        $constraints = DB::select(
-            <<<'SQL'
-            SELECT DISTINCT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'audit_logs'
-              AND COLUMN_NAME = 'user_id'
-            SQL
-        );
-
-        foreach ($constraints as $constraint) {
-            DB::statement('ALTER TABLE `audit_logs` DROP FOREIGN KEY `'.$constraint->CONSTRAINT_NAME.'`');
-        }
-
-        DB::statement('ALTER TABLE `audit_logs` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NULL');
+        $this->dropForeignKeys('role_user', 'admin_user_id', 'admin_users');
+        DB::statement('ALTER TABLE `role_user` CHANGE `admin_user_id` `user_id` BIGINT UNSIGNED NOT NULL');
     }
 
     private function moveAuditLogOwnershipToUsers(): void
@@ -59,27 +60,32 @@ return new class extends Migration
             return;
         }
 
-        $constraints = DB::select(
-            <<<'SQL'
-            SELECT DISTINCT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'audit_logs'
-              AND COLUMN_NAME = 'admin_user_id'
-              AND REFERENCED_TABLE_NAME = 'admin_users'
-            SQL
-        );
-
-        foreach ($constraints as $constraint) {
-            DB::statement('ALTER TABLE `audit_logs` DROP FOREIGN KEY `'.$constraint->CONSTRAINT_NAME.'`');
-        }
-
+        $this->dropForeignKeys('audit_logs', 'admin_user_id', 'admin_users');
         DB::statement('ALTER TABLE `audit_logs` CHANGE `admin_user_id` `user_id` BIGINT UNSIGNED NULL');
 
         if (Schema::hasTable('users')) {
             DB::statement(
                 'UPDATE `audit_logs` AS `logs` LEFT JOIN `users` ON `users`.`id` = `logs`.`user_id` SET `logs`.`user_id` = `users`.`id`'
             );
+        }
+    }
+
+    private function dropForeignKeys(string $table, string $column, string $referencedTable): void
+    {
+        $constraints = DB::select(
+            <<<'SQL'
+            SELECT DISTINCT CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+              AND REFERENCED_TABLE_NAME = ?
+            SQL,
+            [$table, $column, $referencedTable]
+        );
+
+        foreach ($constraints as $constraint) {
+            DB::statement('ALTER TABLE `'.$table.'` DROP FOREIGN KEY `'.$constraint->CONSTRAINT_NAME.'`');
         }
     }
 };
