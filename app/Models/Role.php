@@ -9,8 +9,8 @@ class Role extends HortonModel
         return $this->belongsToMany(Permission::class, 'permission_role', 'role_id', 'permission_id');
     }
 
-    public function adminUsers()
+    public function users()
     {
-        return $this->belongsToMany(AdminUser::class, 'role_user', 'role_id', 'admin_user_id');
+        return $this->belongsToMany(User::class, 'role_user', 'user_id', 'role_id');
     }
 }
