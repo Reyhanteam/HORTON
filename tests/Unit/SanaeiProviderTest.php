@@ -32,7 +32,8 @@ final class SanaeiProviderTest extends TestCase
         );
 
         self::assertSame(ServiceProviderOperation::CREATE, $result->operation);
-        self::assertSame('uuid-1', $result->externalReference);
+        self::assertSame('uuid-1', $result->externalId);
+        self::assertSame('alice', $result->externalReference);
         Http::assertSent(fn ($request) => $request->url() === 'https://sanaei.test/panel/api/clients/add'
             && $request->hasHeader('Authorization', 'Bearer secret-token')
             && $request['client']['email'] === 'alice'
@@ -75,7 +76,7 @@ final class SanaeiProviderTest extends TestCase
         $plan = new Plan(['id' => 20, 'duration_value' => 30, 'capacity_value' => 50_000_000_000]);
         $plan->exists = true;
 
-        $providerAccount = new ServiceProviderAccount(['id' => 2, 'service_provider_id' => 1]);
+        $providerAccount = new ServiceProviderAccount(['id' => 2, 'service_provider_id' => 1, 'metadata' => ['inbound_ids' => [3]]]);
         $providerAccount->exists = true;
         $providerAccount->setSecureCredentials([
             'base_url' => 'https://sanaei.test',
