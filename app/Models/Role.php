@@ -11,6 +11,6 @@ class Role extends HortonModel
 
     public function users()
     {
-        return $this->belongsToMany(User::class, 'role_user', 'user_id', 'role_id');
+        return $this->belongsToMany(User::class, 'role_user', 'role_id', 'user_id');
     }
 }
