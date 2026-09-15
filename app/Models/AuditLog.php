@@ -8,8 +8,8 @@ class AuditLog extends HortonModel
 
     protected $casts = ['old_values' => 'array', 'new_values' => 'array', 'created_at' => 'datetime'];
 
-    public function user()
+    public function adminUser()
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsTo(AdminUser::class, 'admin_user_id');
     }
 }

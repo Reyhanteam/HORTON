@@ -9,13 +9,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 class AdminUser extends Authenticatable implements FilamentUser
 {
     protected $table = 'admin_users';
-
     protected $guarded = [];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array
     {

@@ -2,24 +2,36 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\AdminUser;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $admin = AdminUser::query()->first();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        if (! $admin) {
+            $email = env('ADMIN_EMAIL');
+            $password = env('ADMIN_PASSWORD');
+
+            if (! $email || ! $password) {
+                return;
+            }
+
+            $admin = AdminUser::create([
+                'name' => env('ADMIN_NAME', 'Horton Admin'),
+                'email' => $email,
+                'password' => $password,
+                'status' => 'active',
+            ]);
+        }
+
+        $role = Role::query()->firstOrCreate([
+            'name' => 'super-admin',
         ]);
+
+        $admin->roles()->syncWithoutDetaching([$role->getKey()]);
     }
 }
