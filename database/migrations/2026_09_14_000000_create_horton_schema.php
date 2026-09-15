@@ -25,12 +25,6 @@ return new class extends Migration
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         try {
             foreach ($tables as [$table, $statement]) {
-                // admin_users was the legacy Dashboard identity. Dashboard authentication
-                // now uses the canonical Laravel users table.
-                if (strtolower($table) === 'admin_users') {
-                    continue;
-                }
-
                 DB::unprepared($this->transform($table, $statement));
             }
         } finally {
@@ -129,14 +123,14 @@ return new class extends Migration
             $sql = preg_replace('/REFERENCES\\s+`users`/i', 'REFERENCES `telegram_accounts`', $sql) ?? $sql;
         }
 
+        if ($table === 'audit_logs') {
+            $sql = str_replace('`admin_user_id`', '`user_id`', $sql);
+            $sql = preg_replace('/REFERENCES\\s+`admin_users`/i', 'REFERENCES `users`', $sql) ?? $sql;
+        }
+
         if ($table === 'telegram_accounts') {
             $sql = preg_replace('/^\\s*`user_id`\\s+[^,]+,\\s*$/m', '', $sql) ?? $sql;
             $sql = preg_replace('/^\\s*CONSTRAINT.*`user_id`.*$/mi', '', $sql) ?? $sql;
-        }
-
-        if ($table === 'role_user' || $table === 'audit_logs') {
-            $sql = str_replace('`admin_user_id`', '`user_id`', $sql);
-            $sql = preg_replace('/REFERENCES\\s+`admin_users`/i', 'REFERENCES `users`', $sql) ?? $sql;
         }
 
         return $sql;
