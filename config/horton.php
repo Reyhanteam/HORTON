@@ -7,7 +7,7 @@ return [
         'default_selection' => 'priority',
         'drivers' => [
             'fake' => App\Services\Providers\FakeServiceProvider::class,
-            // 'sanaei' => App\Services\Providers\Sanaei\SanaeiServiceProvider::class,
+            'sanaei' => App\Services\Providers\Sanaei\SanaeiProvider::class,
             // 'marzban' => App\Services\Providers\Marzban\MarzbanServiceProvider::class,
         ],
     ],
