@@ -32,9 +32,25 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        if (Schema::hasTable('audit_logs') && Schema::hasColumn('audit_logs', 'user_id')) {
-            DB::statement('ALTER TABLE `audit_logs` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NULL');
+        if (! Schema::hasTable('audit_logs') || ! Schema::hasColumn('audit_logs', 'user_id')) {
+            return;
         }
+
+        $constraints = DB::select(
+            <<<'SQL'
+            SELECT DISTINCT CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'audit_logs'
+              AND COLUMN_NAME = 'user_id'
+            SQL
+        );
+
+        foreach ($constraints as $constraint) {
+            DB::statement('ALTER TABLE `audit_logs` DROP FOREIGN KEY `'.$constraint->CONSTRAINT_NAME.'`');
+        }
+
+        DB::statement('ALTER TABLE `audit_logs` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NULL');
     }
 
     private function moveAuditLogOwnershipToUsers(): void
@@ -59,5 +75,11 @@ return new class extends Migration
         }
 
         DB::statement('ALTER TABLE `audit_logs` CHANGE `admin_user_id` `user_id` BIGINT UNSIGNED NULL');
+
+        if (Schema::hasTable('users')) {
+            DB::statement(
+                'UPDATE `audit_logs` AS `logs` LEFT JOIN `users` ON `users`.`id` = `logs`.`user_id` SET `logs`.`user_id` = `users`.`id`'
+            );
+        }
     }
 };
