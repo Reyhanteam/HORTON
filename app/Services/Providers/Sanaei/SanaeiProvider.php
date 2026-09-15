@@ -131,9 +131,19 @@ final class SanaeiProvider extends AbstractServiceProvider
 
     public function healthCheck(ServiceProviderContext $context): ServiceProviderResult
     {
+        $started = microtime(true);
         $data = $this->client($context)->get('/panel/api/server/status', 'Health check')->requireSuccess('Health check');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['healthy' => true, 'remote' => $data], 'health-check', 'health-check');
+        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, [
+            'healthy' => true,
+            'latency_ms' => (int) round((microtime(true) - $started) * 1000),
+            'remote' => $data,
+        ], 'health-check', 'health-check');
+    }
+
+    public function connectionTest(ServiceProviderContext $context): ServiceProviderResult
+    {
+        return $this->healthCheck($context);
     }
 
     private function updateEnabled(Service $service, ServiceProviderContext $context, bool $enabled, ServiceProviderOperation $operation): ServiceProviderResult
