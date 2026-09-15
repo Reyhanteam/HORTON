@@ -24,6 +24,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -66,7 +67,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessDashboard(): bool
     {
-        return $this->isActive() && $this->roles()->exists();
+        return $this->isActive() && ($this->hasRole('super-admin') || $this->roles()->exists());
     }
 
     public function canAccessPanel(Panel $panel): bool
