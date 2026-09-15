@@ -20,7 +20,8 @@ final class SanaeiProvider extends AbstractServiceProvider
     {
         $client = $this->client($context);
         $email = (string) ($context->attributes['email'] ?? 'horton-'.$account->getKey().'-'.Str::lower(Str::random(8)));
-        $inboundIds = array_values(array_map('intval', $context->inbounds ?: ($context->attributes['inbound_ids'] ?? [])));
+        $configuredInbounds = $context->account?->metadata['inbound_ids'] ?? [];
+        $inboundIds = array_values(array_map('intval', $context->inbounds ?: ($context->attributes['inbound_ids'] ?? $configuredInbounds)));
 
         if ($inboundIds === []) {
             throw new SanaeiApiException('Sanaei creation requires at least one inbound ID.');
@@ -42,9 +43,16 @@ final class SanaeiProvider extends AbstractServiceProvider
 
         return ServiceProviderResult::success(
             ServiceProviderOperation::CREATE,
-            ['email' => $email, 'remote' => $remote, 'response' => $data],
+            [
+                'status' => 'active',
+                'email' => $email,
+                'sanaei_email' => $email,
+                'remote' => $remote,
+                'response' => $data,
+                'inbound_ids' => $inboundIds,
+            ],
             is_array($remote) ? (string) ($remote['id'] ?? $email) : $email,
-            $context->idempotencyKey,
+            $email,
         );
     }
 
@@ -53,7 +61,7 @@ final class SanaeiProvider extends AbstractServiceProvider
         $email = $this->email($service, $context);
         $remote = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client')->requireSuccess('Read client');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::GET, ['remote' => $remote], $this->externalReference($remote, $email), $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::GET, ['remote' => $remote], $this->externalReference($remote, $email), $email);
     }
 
     protected function doRenew(Service $service, Plan $plan, ServiceProviderContext $context): ServiceProviderResult
@@ -67,7 +75,7 @@ final class SanaeiProvider extends AbstractServiceProvider
 
         $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Renew client')->requireSuccess('Renew client');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::RENEW, ['response' => $data, 'expires_at' => now()->addDays((int) $plan->duration)->toISOString()], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::RENEW, ['response' => $data, 'expires_at' => now()->addDays((int) $plan->duration)->toISOString()], $email, $email);
     }
 
     protected function doExtend(Service $service, int $days, ServiceProviderContext $context): ServiceProviderResult
@@ -83,7 +91,7 @@ final class SanaeiProvider extends AbstractServiceProvider
 
         $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Extend client')->requireSuccess('Extend client');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::EXTEND, ['response' => $data, 'expires_at' => now()->createFromTimestampMs($newExpiry)->toISOString()], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::EXTEND, ['response' => $data, 'expires_at' => now()->createFromTimestampMs($newExpiry)->toISOString()], $email, $email);
     }
 
     protected function doAddCapacity(Service $service, int $capacity, ServiceProviderContext $context): ServiceProviderResult
@@ -96,7 +104,7 @@ final class SanaeiProvider extends AbstractServiceProvider
 
         $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Increase client capacity')->requireSuccess('Increase client capacity');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::ADD_CAPACITY, ['response' => $data, 'capacity' => $payload['totalGB']], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::ADD_CAPACITY, ['response' => $data, 'capacity' => $payload['totalGB']], $email, $email);
     }
 
     protected function doDisable(Service $service, ServiceProviderContext $context): ServiceProviderResult
@@ -109,7 +117,7 @@ final class SanaeiProvider extends AbstractServiceProvider
         $email = $this->email($service, $context);
         $data = $this->client($context)->post('/panel/api/clients/del/'.rawurlencode($email), [], 'Delete client')->requireSuccess('Delete client');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::DELETE, ['response' => $data, 'status' => 'deleted'], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::DELETE, ['response' => $data, 'status' => 'deleted'], $email, $email);
     }
 
     protected function doStatus(Service $service, ServiceProviderContext $context): ServiceProviderResult
@@ -118,14 +126,14 @@ final class SanaeiProvider extends AbstractServiceProvider
         $remote = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client status')->requireSuccess('Read client status');
         $remote = is_array($remote) ? $remote : [];
 
-        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['status' => (bool) ($remote['enable'] ?? false) ? 'active' : 'disabled', 'remote' => $remote], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['status' => (bool) ($remote['enable'] ?? false) ? 'active' : 'disabled', 'remote' => $remote], $email, $email);
     }
 
     public function healthCheck(ServiceProviderContext $context): ServiceProviderResult
     {
         $data = $this->client($context)->get('/panel/api/server/status', 'Health check')->requireSuccess('Health check');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['healthy' => true, 'remote' => $data], 'health-check', $context->idempotencyKey);
+        return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['healthy' => true, 'remote' => $data], 'health-check', 'health-check');
     }
 
     private function updateEnabled(Service $service, ServiceProviderContext $context, bool $enabled, ServiceProviderOperation $operation): ServiceProviderResult
@@ -137,7 +145,7 @@ final class SanaeiProvider extends AbstractServiceProvider
         unset($payload['inboundIds'], $payload['traffic']);
         $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Update client status')->requireSuccess('Update client status');
 
-        return ServiceProviderResult::success($operation, ['response' => $data, 'status' => $enabled ? 'active' : 'disabled'], $email, $context->idempotencyKey);
+        return ServiceProviderResult::success($operation, ['response' => $data, 'status' => $enabled ? 'active' : 'disabled'], $email, $email);
     }
 
     private function client(ServiceProviderContext $context): SanaeiHttpClient
