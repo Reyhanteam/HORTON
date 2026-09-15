@@ -15,25 +15,25 @@ final class WalletLedger
 {
     public function credit(WalletEntryData $entry): WalletTransaction
     {
-        if ($entry->amount <= 0) {
-            throw new DomainRuleViolation('Wallet credit amount must be positive.');
-        }
-
-        return $this->apply($entry);
+        if ($entry->amount <= 0) throw new DomainRuleViolation('Wallet credit amount must be positive.');
+        return $this->apply($entry, 'credit');
     }
 
     public function debit(WalletEntryData $entry): WalletTransaction
     {
-        if ($entry->amount <= 0) {
-            throw new DomainRuleViolation('Wallet debit amount must be positive.');
-        }
-
-        return $this->apply(new WalletEntryData($entry->telegramAccountId, -$entry->amount, $entry->type, $entry->reference, $entry->metadata));
+        if ($entry->amount <= 0) throw new DomainRuleViolation('Wallet debit amount must be positive.');
+        return $this->apply($entry, 'debit');
     }
 
-    private function apply(WalletEntryData $entry): WalletTransaction
+    private function apply(WalletEntryData $entry, string $direction): WalletTransaction
     {
-        return DB::transaction(function () use ($entry): WalletTransaction {
+        return DB::transaction(function () use ($entry, $direction): WalletTransaction {
+            $idempotencyKey = $entry->metadata['idempotency_key'] ?? null;
+            if ($idempotencyKey !== null) {
+                $existing = WalletTransaction::query()->where('idempotency_key', $idempotencyKey)->first();
+                if ($existing) return $existing;
+            }
+
             TelegramAccount::query()->findOrFail($entry->telegramAccountId);
             $wallet = Wallet::query()->where('telegram_account_id', $entry->telegramAccountId)->lockForUpdate()->first();
 
@@ -43,10 +43,8 @@ final class WalletLedger
             }
 
             $before = (int) $wallet->balance;
-            $after = $before + $entry->amount;
-            if ($after < 0) {
-                throw new DomainRuleViolation('Insufficient wallet balance.');
-            }
+            $after = $direction === 'credit' ? $before + $entry->amount : $before - $entry->amount;
+            if ($after < 0) throw new DomainRuleViolation('Insufficient wallet balance.');
 
             $wallet->forceFill(['balance' => $after])->save();
 
@@ -54,11 +52,13 @@ final class WalletLedger
                 'wallet_id' => $wallet->getKey(),
                 'telegram_account_id' => $entry->telegramAccountId,
                 'type' => $entry->type,
+                'direction' => $direction,
                 'amount' => $entry->amount,
                 'balance_before' => $before,
                 'balance_after' => $after,
-                'reference' => $entry->reference,
-                'metadata' => $entry->metadata,
+                'reference_type' => 'application',
+                'description' => $entry->reference,
+                'idempotency_key' => $idempotencyKey,
             ]);
         });
     }
