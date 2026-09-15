@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Models\Role;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -37,6 +38,6 @@ class DashboardIdentityTest extends TestCase
 
         $this->assertInstanceOf(FilamentUser::class, $user);
         $this->assertTrue($user->canAccessDashboard());
-        $this->assertTrue($user->canAccessPanel(app('filament')->getPanel('admin')));
+        $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
     }
 }
