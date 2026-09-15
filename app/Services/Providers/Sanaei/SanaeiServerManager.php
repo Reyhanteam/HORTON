@@ -16,6 +16,8 @@ final class SanaeiServerManager
     public function create(array $data): ServiceProviderAccount
     {
         $provider = $this->provider();
+        $credentials = $this->credentials($data);
+        $this->validateConnectionConfiguration($credentials);
 
         $account = new ServiceProviderAccount([
             'service_provider_id' => $provider->getKey(),
@@ -25,7 +27,7 @@ final class SanaeiServerManager
             'metadata' => $this->metadata($data),
         ]);
 
-        $account->setSecureCredentials($this->credentials($data));
+        $account->setSecureCredentials($credentials);
         $account->save();
 
         return $account;
@@ -49,6 +51,7 @@ final class SanaeiServerManager
             }
         }
         $this->validateCredentials($credentials, requireToken: false);
+        $this->validateConnectionConfiguration($credentials);
 
         $account->setSecureCredentials($credentials);
         $account->save();
@@ -181,6 +184,15 @@ final class SanaeiServerManager
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function validateConnectionConfiguration(array $credentials): void
+    {
+        try {
+            SanaeiHttpClient::fromCredentials($credentials);
+        } catch (SanaeiApiException $e) {
+            throw ValidationException::withMessages(['base_url' => $e->getMessage()]);
         }
     }
 
