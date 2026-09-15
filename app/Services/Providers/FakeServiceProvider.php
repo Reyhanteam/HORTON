@@ -64,8 +64,11 @@ final class FakeServiceProvider extends AbstractServiceProvider
         $key = $context->idempotencyKey;
         $this->calls[] = ['operation' => $operation->value, 'key' => $key];
 
-        if ($key !== null && isset($this->idempotentResults[$key])) {
-            return $this->idempotentResults[$key];
+        // Idempotency is scoped to an operation. The same business idempotency
+        // key may legitimately be reused across different lifecycle operations.
+        $cacheKey = $key === null ? null : $operation->value.':'.$key;
+        if ($cacheKey !== null && isset($this->idempotentResults[$cacheKey])) {
+            return $this->idempotentResults[$cacheKey];
         }
 
         if (isset($this->failures[$operation->value])) {
@@ -80,8 +83,8 @@ final class FakeServiceProvider extends AbstractServiceProvider
             'fake-'.Str::uuid(),
             $key,
         );
-        if ($key !== null) {
-            $this->idempotentResults[$key] = $result;
+        if ($cacheKey !== null) {
+            $this->idempotentResults[$cacheKey] = $result;
         }
         return $result;
     }
