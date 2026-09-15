@@ -7,12 +7,11 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory;
 
     protected $guarded = [];
 
@@ -52,6 +51,10 @@ class User extends Authenticatable implements FilamentUser
 
     public function hasPermission(string $permission): bool
     {
+        if ($this->hasRole('super-admin')) {
+            return true;
+        }
+
         return $this->roles()
             ->whereHas('permissions', fn ($query) => $query->where('name', $permission))
             ->exists();
@@ -64,7 +67,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessDashboard(): bool
     {
-        return $this->isActive() && $this->roles()->exists();
+        return $this->isActive() && ($this->hasRole('super-admin') || $this->roles()->exists());
     }
 
     public function canAccessPanel(Panel $panel): bool
