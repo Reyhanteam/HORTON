@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Providers\Sanaei;
 
 use App\DTOs\SanaeiApiResponse;
+use App\DTOs\Sanaei\SanaeiRequest;
 use App\Exceptions\SanaeiApiException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -43,35 +44,120 @@ final class SanaeiHttpClient
 
     public function get(string $path, string $operation): SanaeiApiResponse
     {
-        return $this->send('GET', $path, null, $operation);
+        return $this->send(SanaeiRequest::get($path, $operation));
     }
 
     public function post(string $path, array $payload, string $operation): SanaeiApiResponse
     {
-        return $this->send('POST', $path, $payload, $operation);
+        return $this->send(SanaeiRequest::post($path, $payload, $operation));
     }
 
-    private function send(string $method, string $path, ?array $payload, string $operation): SanaeiApiResponse
+    public function serverStatus(): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/server/status', 'Read server status');
+    }
+
+    public function openApi(): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/server/openapi.json', 'Read server OpenAPI document');
+    }
+
+    public function listInbounds(): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/inbounds/list', 'List inbounds');
+    }
+
+    public function getInbound(int|string $id): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/inbounds/get/'.rawurlencode((string) $id), 'Read inbound');
+    }
+
+    public function addInbound(array $payload): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/inbounds/add', $payload, 'Create inbound');
+    }
+
+    public function updateInbound(int|string $id, array $payload): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/inbounds/update/'.rawurlencode((string) $id), $payload, 'Update inbound');
+    }
+
+    public function deleteInbound(int|string $id): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/inbounds/del/'.rawurlencode((string) $id), [], 'Delete inbound');
+    }
+
+    public function listClients(): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/clients/list', 'List clients');
+    }
+
+    public function getClient(string $email): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client');
+    }
+
+    public function addClient(array $payload): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/add', $payload, 'Create client');
+    }
+
+    public function updateClient(string $email, array $payload): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Update client');
+    }
+
+    public function deleteClient(string $email): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/del/'.rawurlencode($email), [], 'Delete client');
+    }
+
+    public function resetClientTraffic(string $email): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/'.rawurlencode($email).'/resetTraffic', [], 'Reset client traffic');
+    }
+
+    public function attachClient(string $email, array $payload = []): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/'.rawurlencode($email).'/attach', $payload, 'Attach client');
+    }
+
+    public function detachClient(string $email, array $payload = []): SanaeiApiResponse
+    {
+        return $this->post('/panel/api/clients/'.rawurlencode($email).'/detach', $payload, 'Detach client');
+    }
+
+    public function subscriptionLinks(string $subscriptionId): SanaeiApiResponse
+    {
+        return $this->get('/panel/api/clients/subLinks/'.rawurlencode($subscriptionId), 'Read subscription links');
+    }
+
+    public function request(SanaeiRequest $request): SanaeiApiResponse
+    {
+        return $this->send($request);
+    }
+
+    private function send(SanaeiRequest $request): SanaeiApiResponse
     {
         try {
-            $request = $this->request();
-            $response = $method === 'GET'
-                ? $request->get($this->url($path))
-                : $request->post($this->url($path), $payload ?? []);
+            $pending = $this->requestBuilder();
+            $response = $request->method === 'GET'
+                ? $pending->get($this->url($request->path))
+                : $pending->post($this->url($request->path), $request->payload);
         } catch (\Throwable $e) {
-            throw new SanaeiApiException($operation.' connection failed.', null, null, true, $e);
+            throw new SanaeiApiException($request->operation.'. connection failed.', null, null, true, $e);
         }
 
         $body = $response->json();
         if (! is_array($body)) {
-            throw new SanaeiApiException($operation.' returned an invalid response.', $response->status());
+            throw new SanaeiApiException($request->operation.' returned an invalid response.', $response->status());
         }
 
         $apiResponse = SanaeiApiResponse::from($response->status(), $body, $response->headers());
 
         if ($response->status() === 429 || $response->serverError()) {
             throw new SanaeiApiException(
-                $operation.' failed with a retryable HTTP error.',
+                $request->operation.' failed with a retryable HTTP error.',
                 $response->status(),
                 $apiResponse->message,
                 true,
@@ -81,7 +167,7 @@ final class SanaeiHttpClient
         return $apiResponse;
     }
 
-    private function request(): PendingRequest
+    private function requestBuilder(): PendingRequest
     {
         return Http::acceptJson()
             ->asJson()
