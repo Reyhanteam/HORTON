@@ -9,6 +9,7 @@ use App\Contracts\PaymentGateway;
 use App\Contracts\PricingService;
 use App\Contracts\ProviderSelectorContract;
 use App\Contracts\ServiceProviderContract;
+use App\Contracts\ServiceProviderFactoryContract;
 use App\Events\OrderPaid;
 use App\Events\UserRegistered;
 use App\Listeners\DispatchProvisionPaidOrder;
@@ -22,6 +23,7 @@ use App\Services\DiscountCalculator;
 use App\Services\Payments\FakePaymentGateway;
 use App\Services\Providers\FakeServiceProvider;
 use App\Services\Providers\ProviderSelector;
+use App\Services\Providers\ServiceProviderFactory;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -34,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(DiscountService::class, DiscountCalculator::class);
         $this->app->bind(PaymentGateway::class, FakePaymentGateway::class);
         $this->app->bind(ServiceProviderContract::class, FakeServiceProvider::class);
+        $this->app->bind(ServiceProviderFactoryContract::class, ServiceProviderFactory::class);
         $this->app->bind(ProviderSelectorContract::class, ProviderSelector::class);
     }
 
