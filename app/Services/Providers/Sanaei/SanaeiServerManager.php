@@ -8,9 +8,7 @@ use App\DTOs\ServiceProviderContext;
 use App\Exceptions\SanaeiApiException;
 use App\Models\ServiceProvider;
 use App\Models\ServiceProviderAccount;
-use App\Models\ServiceOperation;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class SanaeiServerManager
@@ -21,7 +19,7 @@ final class SanaeiServerManager
 
         $account = new ServiceProviderAccount([
             'service_provider_id' => $provider->getKey(),
-            'name' => trim((string) $data['name']),
+            'name' => trim((string) ($data['name'] ?? '')),
             'status' => $data['status'] ?? 'active',
             'priority' => (int) ($data['priority'] ?? 100),
             'metadata' => $this->metadata($data),
@@ -50,6 +48,7 @@ final class SanaeiServerManager
                 $credentials[$key] = $data[$key];
             }
         }
+        $this->validateCredentials($credentials, requireToken: false);
 
         $account->setSecureCredentials($credentials);
         $account->save();
@@ -162,13 +161,27 @@ final class SanaeiServerManager
 
     private function credentials(array $data): array
     {
-        return [
-            'base_url' => rtrim((string) $data['base_url'], '/'),
-            'token' => (string) $data['token'],
+        $credentials = [
+            'base_url' => rtrim(trim((string) ($data['base_url'] ?? '')), '/'),
+            'token' => trim((string) ($data['token'] ?? '')),
             'timeout' => max(1, (int) ($data['timeout'] ?? 15)),
             'connect_timeout' => max(1, (int) ($data['connect_timeout'] ?? 5)),
             'retry_times' => max(0, (int) ($data['retry_times'] ?? 2)),
         ];
+
+        $this->validateCredentials($credentials, requireToken: true);
+        return $credentials;
+    }
+
+    private function validateCredentials(array $credentials, bool $requireToken): void
+    {
+        $errors = [];
+        if (($credentials['base_url'] ?? '') === '') $errors['base_url'] = 'Sanaei API Base URL is required.';
+        if ($requireToken && ($credentials['token'] ?? '') === '') $errors['token'] = 'Sanaei API token is required.';
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     private function metadata(array $data): array
