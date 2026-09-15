@@ -38,8 +38,8 @@ final class SanaeiProvider extends AbstractServiceProvider
             'inboundIds' => $inboundIds,
         ];
 
-        $data = $client->post('/panel/api/clients/add', $payload, 'Create client')->requireSuccess('Create client');
-        $remote = $client->get('/panel/api/clients/get/'.rawurlencode($email), 'Read created client')->requireSuccess('Read created client');
+        $data = $client->addClient($payload)->requireSuccess('Create client');
+        $remote = $client->getClient($email)->requireSuccess('Read created client');
 
         return ServiceProviderResult::success(
             ServiceProviderOperation::CREATE,
@@ -59,7 +59,7 @@ final class SanaeiProvider extends AbstractServiceProvider
     protected function doGet(Service $service, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $remote = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client')->requireSuccess('Read client');
+        $remote = $this->client($context)->getClient($email)->requireSuccess('Read client');
 
         return ServiceProviderResult::success(ServiceProviderOperation::GET, ['remote' => $remote], $this->externalReference($remote, $email), $email);
     }
@@ -67,21 +67,21 @@ final class SanaeiProvider extends AbstractServiceProvider
     protected function doRenew(Service $service, Plan $plan, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $current = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client before renewal')->requireSuccess('Read client before renewal');
+        $current = $this->client($context)->getClient($email)->requireSuccess('Read client before renewal');
         $current = is_array($current) ? $current : [];
-        $expiry = now()->addDays((int) $plan->duration)->getTimestampMs();
-        $payload = [...$current, 'totalGB' => (int) $plan->capacity, 'expiryTime' => $expiry, 'enable' => true];
+        $expiresAt = now()->addDays((int) $plan->duration);
+        $payload = [...$current, 'totalGB' => (int) $plan->capacity, 'expiryTime' => $expiresAt->getTimestampMs(), 'enable' => true];
         unset($payload['inboundIds'], $payload['traffic']);
 
-        $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Renew client')->requireSuccess('Renew client');
+        $data = $this->client($context)->updateClient($email, $payload)->requireSuccess('Renew client');
 
-        return ServiceProviderResult::success(ServiceProviderOperation::RENEW, ['response' => $data, 'expires_at' => now()->addDays((int) $plan->duration)->toISOString()], $email, $email);
+        return ServiceProviderResult::success(ServiceProviderOperation::RENEW, ['response' => $data, 'expires_at' => $expiresAt->toISOString()], $email, $email);
     }
 
     protected function doExtend(Service $service, int $days, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $current = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client before extension')->requireSuccess('Read client before extension');
+        $current = $this->client($context)->getClient($email)->requireSuccess('Read client before extension');
         $current = is_array($current) ? $current : [];
         $currentExpiry = (int) ($current['expiryTime'] ?? 0);
         $base = $currentExpiry > 0 ? max($currentExpiry, now()->getTimestampMs()) : now()->getTimestampMs();
@@ -89,7 +89,7 @@ final class SanaeiProvider extends AbstractServiceProvider
         $payload = [...$current, 'expiryTime' => $newExpiry];
         unset($payload['inboundIds'], $payload['traffic']);
 
-        $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Extend client')->requireSuccess('Extend client');
+        $data = $this->client($context)->updateClient($email, $payload)->requireSuccess('Extend client');
 
         return ServiceProviderResult::success(ServiceProviderOperation::EXTEND, ['response' => $data, 'expires_at' => now()->createFromTimestampMs($newExpiry)->toISOString()], $email, $email);
     }
@@ -97,12 +97,12 @@ final class SanaeiProvider extends AbstractServiceProvider
     protected function doAddCapacity(Service $service, int $capacity, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $current = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client before capacity update')->requireSuccess('Read client before capacity update');
+        $current = $this->client($context)->getClient($email)->requireSuccess('Read client before capacity update');
         $current = is_array($current) ? $current : [];
         $payload = [...$current, 'totalGB' => (int) ($current['totalGB'] ?? 0) + $capacity];
         unset($payload['inboundIds'], $payload['traffic']);
 
-        $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Increase client capacity')->requireSuccess('Increase client capacity');
+        $data = $this->client($context)->updateClient($email, $payload)->requireSuccess('Increase client capacity');
 
         return ServiceProviderResult::success(ServiceProviderOperation::ADD_CAPACITY, ['response' => $data, 'capacity' => $payload['totalGB']], $email, $email);
     }
@@ -115,7 +115,7 @@ final class SanaeiProvider extends AbstractServiceProvider
     protected function doDelete(Service $service, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $data = $this->client($context)->post('/panel/api/clients/del/'.rawurlencode($email), [], 'Delete client')->requireSuccess('Delete client');
+        $data = $this->client($context)->deleteClient($email)->requireSuccess('Delete client');
 
         return ServiceProviderResult::success(ServiceProviderOperation::DELETE, ['response' => $data, 'status' => 'deleted'], $email, $email);
     }
@@ -123,7 +123,7 @@ final class SanaeiProvider extends AbstractServiceProvider
     protected function doStatus(Service $service, ServiceProviderContext $context): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $remote = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client status')->requireSuccess('Read client status');
+        $remote = $this->client($context)->getClient($email)->requireSuccess('Read client status');
         $remote = is_array($remote) ? $remote : [];
 
         return ServiceProviderResult::success(ServiceProviderOperation::STATUS, ['status' => (bool) ($remote['enable'] ?? false) ? 'active' : 'disabled', 'remote' => $remote], $email, $email);
@@ -132,7 +132,7 @@ final class SanaeiProvider extends AbstractServiceProvider
     public function healthCheck(ServiceProviderContext $context): ServiceProviderResult
     {
         $started = microtime(true);
-        $data = $this->client($context)->get('/panel/api/server/status', 'Health check')->requireSuccess('Health check');
+        $data = $this->client($context)->serverStatus()->requireSuccess('Health check');
 
         return ServiceProviderResult::success(ServiceProviderOperation::STATUS, [
             'healthy' => true,
@@ -149,11 +149,11 @@ final class SanaeiProvider extends AbstractServiceProvider
     private function updateEnabled(Service $service, ServiceProviderContext $context, bool $enabled, ServiceProviderOperation $operation): ServiceProviderResult
     {
         $email = $this->email($service, $context);
-        $current = $this->client($context)->get('/panel/api/clients/get/'.rawurlencode($email), 'Read client before status update')->requireSuccess('Read client before status update');
+        $current = $this->client($context)->getClient($email)->requireSuccess('Read client before status update');
         $current = is_array($current) ? $current : [];
         $payload = [...$current, 'enable' => $enabled];
         unset($payload['inboundIds'], $payload['traffic']);
-        $data = $this->client($context)->post('/panel/api/clients/update/'.rawurlencode($email), $payload, 'Update client status')->requireSuccess('Update client status');
+        $data = $this->client($context)->updateClient($email, $payload)->requireSuccess('Update client status');
 
         return ServiceProviderResult::success($operation, ['response' => $data, 'status' => $enabled ? 'active' : 'disabled'], $email, $email);
     }
