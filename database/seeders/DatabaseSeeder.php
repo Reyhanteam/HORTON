@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -32,6 +33,20 @@ class DatabaseSeeder extends Seeder
             'name' => 'super-admin',
         ]);
 
+        $permissions = [
+            'provider-servers.view',
+            'provider-servers.create',
+            'provider-servers.update',
+            'provider-servers.delete',
+            'provider-servers.test',
+            'provider-servers.health',
+        ];
+
+        $permissionIds = collect($permissions)
+            ->map(fn (string $name): int => Permission::query()->firstOrCreate(['name' => $name])->getKey())
+            ->all();
+
+        $role->permissions()->syncWithoutDetaching($permissionIds);
         $user->roles()->syncWithoutDetaching([$role->getKey()]);
     }
 }
