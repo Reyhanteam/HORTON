@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,6 +12,7 @@ return new class extends Migration
         Schema::disableForeignKeyConstraints();
 
         try {
+            $this->moveAuditLogOwnershipToUsers();
             Schema::dropIfExists('admin_users');
         } finally {
             Schema::enableForeignKeyConstraints();
@@ -29,5 +31,33 @@ return new class extends Migration
             $table->rememberToken();
             $table->timestamps();
         });
+
+        if (Schema::hasTable('audit_logs') && Schema::hasColumn('audit_logs', 'user_id')) {
+            DB::statement('ALTER TABLE `audit_logs` CHANGE `user_id` `admin_user_id` BIGINT UNSIGNED NULL');
+        }
+    }
+
+    private function moveAuditLogOwnershipToUsers(): void
+    {
+        if (! Schema::hasTable('audit_logs') || ! Schema::hasColumn('audit_logs', 'admin_user_id')) {
+            return;
+        }
+
+        $constraints = DB::select(
+            <<<'SQL'
+            SELECT DISTINCT CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'audit_logs'
+              AND COLUMN_NAME = 'admin_user_id'
+              AND REFERENCED_TABLE_NAME = 'admin_users'
+            SQL
+        );
+
+        foreach ($constraints as $constraint) {
+            DB::statement('ALTER TABLE `audit_logs` DROP FOREIGN KEY `'.$constraint->CONSTRAINT_NAME.'`');
+        }
+
+        DB::statement('ALTER TABLE `audit_logs` CHANGE `admin_user_id` `user_id` BIGINT UNSIGNED NULL');
     }
 };
