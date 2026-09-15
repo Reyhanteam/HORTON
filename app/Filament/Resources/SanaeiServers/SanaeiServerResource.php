@@ -8,7 +8,6 @@ use App\Filament\Resources\SanaeiServers\Pages\CreateSanaeiServer;
 use App\Filament\Resources\SanaeiServers\Pages\EditSanaeiServer;
 use App\Filament\Resources\SanaeiServers\Pages\ListSanaeiServers;
 use App\Models\ServiceProviderAccount;
-use App\Models\User;
 use App\Services\Providers\Sanaei\SanaeiServerManager;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -35,18 +34,7 @@ final class SanaeiServerResource extends Resource
 
     public static function canViewAny(): bool
     {
-        $user = auth()->user();
-
-        if (! $user instanceof User || ! $user->isActive()) {
-            return false;
-        }
-
-        return $user->hasRole('super-admin') || $user->hasPermission('provider-servers.view');
-    }
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return static::canViewAny();
+        return true;
     }
 
     public static function form(Schema $schema): Schema
