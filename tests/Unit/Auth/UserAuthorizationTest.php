@@ -27,6 +27,11 @@ final class UserAuthorizationTest extends TestCase
     public function test_active_dashboard_user_with_a_role_can_access_dashboard(): void
     {
         $roles = new class {
+            public function where(string $column, string $value): self
+            {
+                return $this;
+            }
+
             public function exists(): bool
             {
                 return true;
