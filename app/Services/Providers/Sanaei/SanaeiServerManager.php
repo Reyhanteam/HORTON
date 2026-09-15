@@ -90,7 +90,7 @@ final class SanaeiServerManager
 
         $started = microtime(true);
         try {
-            $result = (new SanaeiProvider)->connectionTest(
+            $result = app(SanaeiProvider::class)->connectionTest(
                 new ServiceProviderContext(provider: $account->provider, account: $account)
             );
 
