@@ -84,7 +84,8 @@ final class SanaeiHttpClient
                     'latency_ms' => $this->latency($started),
                     'exception' => $e::class,
                 ]);
-                throw new SanaeiApiException($request->operation.'. connection failed.', $e->response?->status(), null, true, $e);
+                $status = $e instanceof RequestException ? $e->response->status() : null;
+                throw new SanaeiApiException($request->operation.'. connection failed.', $status, null, true, $e);
             }
 
             $body = $response->json();
@@ -140,7 +141,7 @@ final class SanaeiHttpClient
     private function retryableException(\Throwable $exception): bool
     {
         return $exception instanceof ConnectionException
-            || ($exception instanceof RequestException && $this->retryableStatus($exception->response?->status()));
+            || ($exception instanceof RequestException && $this->retryableStatus($exception->response->status()));
     }
 
     private function retryableStatus(?int $status): bool
