@@ -9,7 +9,6 @@ use App\Filament\Resources\BotSetings\Pages\ListBotSetings;
 use App\Filament\Resources\BotSetings\Schemas\BotSetingForm;
 use App\Filament\Resources\BotSetings\Tables\BotSetingsTable;
 use App\Models\BotSetting;
-use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -36,18 +35,7 @@ class BotSetingResource extends Resource
 
     public static function canViewAny(): bool
     {
-        $user = auth()->user();
-
-        if (! $user instanceof User || ! $user->isActive()) {
-            return false;
-        }
-
-        return $user->hasRole('super-admin') || $user->hasPermission('settings.view');
-    }
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return static::canViewAny();
+        return true;
     }
 
     public static function canCreate(): bool
