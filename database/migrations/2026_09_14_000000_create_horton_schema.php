@@ -123,6 +123,11 @@ return new class extends Migration
             $sql = preg_replace('/REFERENCES\\s+`users`/i', 'REFERENCES `telegram_accounts`', $sql) ?? $sql;
         }
 
+        if ($table === 'audit_logs') {
+            $sql = str_replace('`admin_user_id`', '`user_id`', $sql);
+            $sql = preg_replace('/REFERENCES\\s+`admin_users`/i', 'REFERENCES `users`', $sql) ?? $sql;
+        }
+
         if ($table === 'telegram_accounts') {
             $sql = preg_replace('/^\\s*`user_id`\\s+[^,]+,\\s*$/m', '', $sql) ?? $sql;
             $sql = preg_replace('/^\\s*CONSTRAINT.*`user_id`.*$/mi', '', $sql) ?? $sql;
