@@ -112,7 +112,9 @@ final class ProvisionPaidOrder
                 'external_id' => $result->externalId,
                 'external_reference' => $result->externalReference,
                 'capacity' => $result->data['capacity'] ?? $service->capacity,
-                'metadata' => [...($service->metadata ?? []), 'provider_result' => $result->data],
+                'metadata' => [...($service->metadata ?? []), 'provider_result' => $result->data, ...array_filter([
+                    'sanaei_email' => $result->data['sanaei_email'] ?? null,
+                ], static fn ($value): bool => $value !== null)],
             ]);
             $operation->update([
                 'status' => 'completed',
