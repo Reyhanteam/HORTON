@@ -2,17 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Models\AdminUser;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = AdminUser::query()->first();
+        $user = User::query()->first();
 
-        if (! $admin) {
+        if (! $user) {
             $email = env('ADMIN_EMAIL');
             $password = env('ADMIN_PASSWORD');
 
@@ -20,7 +20,7 @@ class DatabaseSeeder extends Seeder
                 return;
             }
 
-            $admin = AdminUser::create([
+            $user = User::create([
                 'name' => env('ADMIN_NAME', 'Horton Admin'),
                 'email' => $email,
                 'password' => $password,
@@ -32,6 +32,6 @@ class DatabaseSeeder extends Seeder
             'name' => 'super-admin',
         ]);
 
-        $admin->roles()->syncWithoutDetaching([$role->getKey()]);
+        $user->roles()->syncWithoutDetaching([$role->getKey()]);
     }
 }
