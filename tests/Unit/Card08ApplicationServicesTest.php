@@ -9,7 +9,6 @@ use App\DTOs\PaymentRequest;
 use App\Services\Payments\FakePaymentGateway;
 use App\Services\Providers\FakeServiceProvider;
 use App\Models\Plan;
-use App\Models\Service;
 use App\Models\TelegramAccount;
 use PHPUnit\Framework\TestCase;
 
@@ -35,7 +34,7 @@ final class Card08ApplicationServicesTest extends TestCase
     public function test_fake_service_provider_is_replaceable(): void
     {
         $account = $this->createMock(TelegramAccount::class);
-        $plan = $this->createMock(Plan::class);
+        $plan = new Plan();
         $plan->capacity = 10;
         $plan->duration = 30;
 
