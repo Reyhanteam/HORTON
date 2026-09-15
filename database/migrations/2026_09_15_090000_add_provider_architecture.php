@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,6 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('service_providers')) {
+            $this->ensureServiceProviderReferenceKey();
+
             Schema::table('service_providers', function (Blueprint $table): void {
                 if (! Schema::hasColumn('service_providers', 'priority')) {
                     $table->unsignedInteger('priority')->default(100)->index();
@@ -154,5 +157,28 @@ return new class extends Migration
                 }
             });
         }
+    }
+
+    private function ensureServiceProviderReferenceKey(): void
+    {
+        $uniqueIndexes = DB::select(
+            "SHOW INDEX FROM `service_providers` WHERE `Column_name` = 'id' AND `Non_unique` = 0"
+        );
+
+        if ($uniqueIndexes !== []) {
+            return;
+        }
+
+        $duplicate = DB::selectOne(
+            "SELECT `id`, COUNT(*) AS `aggregate` FROM `service_providers` GROUP BY `id` HAVING COUNT(*) > 1 LIMIT 1"
+        );
+
+        if ($duplicate !== null) {
+            throw new RuntimeException(
+                'Cannot add the service_providers.id primary key because duplicate ids exist: '.$duplicate->id
+            );
+        }
+
+        DB::statement('ALTER TABLE `service_providers` ADD PRIMARY KEY (`id`)');
     }
 };
