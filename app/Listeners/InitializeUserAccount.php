@@ -10,6 +10,7 @@ use App\Models\ReferralAccount;
 use App\Models\Wallet;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Str;
 
 final class InitializeUserAccount implements ShouldQueue
 {
@@ -31,7 +32,12 @@ final class InitializeUserAccount implements ShouldQueue
 
         ReferralAccount::query()->firstOrCreate(
             ['telegram_account_id' => $account->getKey()],
-            ['commission_rate' => 0, 'cashback_rate' => 0, 'is_active' => true],
+            [
+                'code' => 'HRT-'.Str::upper(Str::random(10)),
+                'commission_rate' => 0,
+                'cashback_rate' => 0,
+                'is_active' => true,
+            ],
         );
     }
 }
