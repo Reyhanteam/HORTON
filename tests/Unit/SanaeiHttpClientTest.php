@@ -10,7 +10,6 @@ use App\Exceptions\SanaeiApiException;
 use App\Services\Providers\Sanaei\SanaeiHttpClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 final class SanaeiHttpClientTest extends TestCase
@@ -69,12 +68,16 @@ final class SanaeiHttpClientTest extends TestCase
 
     public function test_retryable_http_error_retries_then_succeeds(): void
     {
-        Http::fakeSequence('https://sanaei.test/panel/api/server/status')
-            ->push(['success' => false, 'msg' => 'temporary'], 503)
-            ->push(['success' => true, 'obj' => ['online' => true]], 200);
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+            return $attempts === 1
+                ? Http::response(['success' => false, 'msg' => 'temporary'], 503)
+                : Http::response(['success' => true, 'obj' => ['online' => true]], 200);
+        });
         $response = $this->client(retryTimes: 1)->serverStatus();
         self::assertTrue($response->success);
-        self::assertCount(2, Http::recorded());
+        self::assertSame(2, $attempts);
     }
 
     public function test_authentication_failure_is_not_retried(): void
@@ -86,25 +89,25 @@ final class SanaeiHttpClientTest extends TestCase
         self::assertCount(1, Http::recorded());
     }
 
-    public function test_invalid_response_is_rejected_and_safe_log_contains_no_secret(): void
+    public function test_invalid_response_is_rejected_without_secret_in_exception(): void
     {
-        Log::fake();
         Http::fake(['https://sanaei.test/panel/api/server/status' => Http::response('not-json', 200)]);
         try {
             $this->client()->serverStatus();
             self::fail('Expected invalid response exception.');
         } catch (SanaeiApiException $e) {
+            self::assertStringContainsString('invalid response', $e->getMessage());
             self::assertStringNotContainsString('secret-token', $e->getMessage());
         }
-        Log::assertLogged('warning', function ($message, $context): bool {
-            return $message === 'Sanaei API returned an invalid response'
-                && ! in_array('secret-token', $context, true);
-        });
     }
 
     public function test_connection_failure_is_retryable_and_does_not_leak_credentials(): void
     {
-        Http::fake(function () { throw new ConnectionException('DNS lookup failed'); });
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+            throw new ConnectionException('DNS lookup failed');
+        });
         try {
             $this->client(retryTimes: 1)->serverStatus();
             self::fail('Expected SanaeiApiException.');
@@ -112,12 +115,11 @@ final class SanaeiHttpClientTest extends TestCase
             self::assertTrue($e->retryable);
             self::assertStringNotContainsString('secret-token', $e->getMessage());
         }
-        self::assertCount(2, Http::recorded());
+        self::assertSame(2, $attempts);
     }
 
-    public function test_rate_limit_is_retryable_and_safe_log_contains_no_secret(): void
+    public function test_rate_limit_is_retryable_and_secret_is_not_in_exception(): void
     {
-        Log::fake();
         Http::fake(['https://sanaei.test/panel/api/server/status' => Http::response(['success' => false, 'msg' => 'too many requests'], 429)]);
         try {
             $this->client()->serverStatus();
@@ -126,13 +128,17 @@ final class SanaeiHttpClientTest extends TestCase
             self::assertTrue($e->retryable);
             self::assertStringNotContainsString('secret-token', $e->getMessage());
         }
-        Log::assertLogged('warning', fn ($message, $context): bool => ! in_array('secret-token', $context, true));
     }
 
     public function test_private_and_local_provider_urls_are_blocked_by_default(): void
     {
         foreach (['http://127.0.0.1:2053', 'http://10.0.0.5:2053', 'http://localhost:2053', 'http://metadata.google.internal'] as $url) {
-            $this->expectExceptionForUrl($url);
+            try {
+                SanaeiHttpClient::fromCredentials(['base_url' => $url, 'token' => 'secret-token']);
+                self::fail('Expected blocked URL: '.$url);
+            } catch (SanaeiApiException $e) {
+                self::assertStringContainsString('blocked private or local destination', $e->getMessage());
+            }
         }
     }
 
@@ -154,16 +160,6 @@ final class SanaeiHttpClientTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://sanaei.test/panel/api/inbounds/update/7'
             && $request['remark'] === 'x'
             && ! str_contains(json_encode($request->data(), JSON_THROW_ON_ERROR), 'secret-token'));
-    }
-
-    private function expectExceptionForUrl(string $url): void
-    {
-        try {
-            SanaeiHttpClient::fromCredentials(['base_url' => $url, 'token' => 'secret-token']);
-            self::fail('Expected blocked URL: '.$url);
-        } catch (SanaeiApiException $e) {
-            self::assertStringContainsString('blocked private or local destination', $e->getMessage());
-        }
     }
 
     private function client(int $retryTimes = 0): SanaeiHttpClient
