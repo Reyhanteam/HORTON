@@ -1,23 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 class Plan extends HortonModel
 {
-    protected $casts = ['duration' => 'integer', 'capacity' => 'integer', 'limits' => 'array', 'metadata' => 'array', 'created_at' => 'datetime', 'updated_at' => 'datetime'];
+    protected $casts = ['duration_value' => 'integer', 'capacity_value' => 'integer', 'limits' => 'array', 'metadata' => 'array', 'created_at' => 'datetime', 'updated_at' => 'datetime', 'is_trial' => 'boolean'];
 
-    public function product()
+    public function getDurationAttribute(): int
     {
-        return $this->belongsTo(Product::class);
+        return (int) ($this->attributes['duration_value'] ?? 0);
     }
 
-    public function prices()
+    public function getCapacityAttribute(): int
     {
-        return $this->hasMany(PlanPrice::class);
+        return (int) ($this->attributes['capacity_value'] ?? 0);
     }
 
-    public function orderItems()
-    {
-        return $this->hasMany(OrderItem::class);
-    }
+    public function product() { return $this->belongsTo(Product::class); }
+    public function prices() { return $this->hasMany(PlanPrice::class); }
+    public function orderItems() { return $this->hasMany(OrderItem::class); }
 }

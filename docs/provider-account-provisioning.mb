@@ -1,0 +1,167 @@
+# HORTON VPN Provisioning Blueprint (.mb)
+
+این فایل قرارداد عملیاتی ساخت سرویس VPN را مستند می‌کند تا هنگام اضافه‌کردن Provider جدید مثل Marzban، منطق داخلی HORTON ثابت بماند.
+
+## 1. مسیر کامل خرید تا ساخت VPN
+
+```text
+Telegram User
+   |
+   v
+Shop -> Product -> Plan
+   |
+   v
+Create Order
+   |
+   v
+Create Invoice
+   |
+   v
+Payment Request
+   |
+   +--> Online Gateway callback
+   |        |
+   |        v
+   |     Verify payment
+   |
+   +--> Manual receipt -> Admin Dashboard approval
+   |
+   v
+Order = PAID
+   |
+   v
+ProvisionPaidOrder
+   |
+   v
+ProviderSelector
+   |   filter: active/status/health/capacity/policy/capability/region
+   |   sort: priority ASC, id ASC
+   v
+Selected ServiceProvider instance
+   |
+   v
+ServiceProviderFactory(driver)
+   |
+   +--> fake
+   +--> sanaei (future)
+   +--> marzban (future)
+   +--> sing-box (future)
+   +--> wireguard (future)
+   |
+   v
+ServiceProviderContract::create()
+   |
+   v
+Concrete Provider API adapter
+   |
+   v
+External VPN account/config created
+   |
+   v
+Save external_id + external_reference + provider/account IDs
+   |
+   v
+Service = ACTIVE
+```
+
+## 2. قانون مهم
+
+Business Logic نباید هیچ‌وقت `SanaeiProvider` یا `MarzbanProvider` را مستقیم صدا بزند.
+
+فقط این مسیر مجاز است:
+
+```text
+Application Action
+ -> ProviderSelectorContract
+ -> ServiceProviderFactory
+ -> ServiceProviderContract
+ -> Concrete Provider Adapter
+ -> External API
+```
+
+## 3. اطلاعاتی که هنگام ساخت باید به Provider داده شود
+
+حداقل داده‌های مورد انتظار:
+
+- Telegram account داخلی
+- Plan
+- duration
+- capacity
+- trial flag
+- selected provider instance
+- selected provider account/credentials
+- selected inbounds
+- region/policy attributes
+- idempotency key
+- internal service/order IDs
+
+Provider adapter این داده داخلی را به مدل API خودش تبدیل می‌کند.
+
+## 4. ساخت اکانت در Marzban در آینده
+
+وقتی Marzban اضافه شد، فقط Adapter/Client مربوط به Marzban باید بداند API دقیق پنل چیست.
+
+مراحل:
+
+1. HORTON یک `service_providers` با `driver = marzban` انتخاب می‌کند.
+2. `service_provider_accounts` اطلاعات اتصال امن پنل را نگه می‌دارد.
+3. `provider_inbounds` اینباندهای فعال پنل را نگه می‌دارد.
+4. Adapter درخواست ساخت کاربر را از Plan + Context می‌سازد.
+5. Client درخواست را به API Marzban ارسال می‌کند.
+6. پاسخ API به `ServiceProviderResult` تبدیل می‌شود.
+7. HORTON فقط `external_id`, `external_reference`, status و metadata لازم را ذخیره می‌کند.
+8. Token/password/secret نباید در log یا response عمومی ذخیره شود.
+
+## 5. Idempotency
+
+کلید ساخت از این الگو استفاده می‌کند:
+
+`order:{order_id}:item:{order_item_id}:create`
+
+اگر webhook یا queue دوباره اجرا شد، همان کلید باید به همان عملیات قبلی متصل بماند و Provider جدیدی برای همان سفارش ساخته نشود.
+
+## 6. انتخاب پنل با اولویت
+
+مثال:
+
+```text
+Sanaei #1  priority=10  capacity=full   -> SKIP
+Sanaei #2  priority=20  capacity=free   -> SELECT
+Marzban #1 priority=30  capacity=free   -> not reached
+```
+
+اگر Provider اول سالم، فعال و مجاز باشد، همیشه قبل از Provider با priority بالاتر بررسی می‌شود.
+
+## 7. Capability
+
+هر Provider می‌تواند قابلیت‌های متفاوت داشته باشد:
+
+```text
+CREATE
+GET
+RENEW
+EXTEND
+ADD_CAPACITY
+DISABLE
+DELETE
+STATUS
+```
+
+مثلاً اگر WireGuard `ADD_CAPACITY` را پشتیبانی نکند، Business Logic نباید اسم WireGuard را بررسی کند؛ فقط capability همان Provider بررسی می‌شود.
+
+## 8. شکست ساخت
+
+در صورت خطای Provider:
+
+```text
+Service -> FAILED
+ServiceOperation -> FAILED
+error_code/error_message -> internal inspection
+```
+
+سفارش پرداخت‌شده نباید دوباره به pending payment برگردد. Retry فقط باید با همان idempotency key انجام شود.
+
+## 9. هدف طراحی
+
+اضافه‌کردن Marzban نباید باعث تغییر در Telegram Controller، Shop، Checkout، Invoice یا Payment Gateway شود.
+فقط Provider implementation، API Client، DTO mapping و تنظیمات همان Provider اضافه می‌شوند.

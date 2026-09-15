@@ -4,30 +4,85 @@ declare(strict_types=1);
 
 namespace App\Services\Providers;
 
-use App\Contracts\ServiceProviderContract;
+use App\DTOs\ServiceProviderContext;
+use App\DTOs\ServiceProviderResult;
+use App\Enums\ServiceProviderOperation;
+use App\Exceptions\ServiceProviderException;
 use App\Models\Plan;
 use App\Models\Service;
 use App\Models\TelegramAccount;
 use Illuminate\Support\Str;
 
-final class FakeServiceProvider implements ServiceProviderContract
+final class FakeServiceProvider extends AbstractServiceProvider
 {
-    public function create(TelegramAccount $account, Plan $plan, array $context = []): array
+    private array $failures = [];
+    private array $calls = [];
+    private array $idempotentResults = [];
+
+    public function fail(ServiceProviderOperation $operation, string $message = 'Simulated provider failure.'): self
     {
-        return ['provider_id' => 'fake-'.Str::uuid(), 'status' => 'active', 'capacity' => $plan->capacity, 'metadata' => $context];
+        $this->failures[$operation->value] = $message;
+        return $this;
     }
 
-    public function get(Service $service): array { return ['status' => $service->status, 'capacity' => $service->capacity]; }
+    public function calls(): array { return $this->calls; }
 
-    public function renew(Service $service, Plan $plan): array { return ['status' => 'active', 'expires_at' => now()->addDays((int) $plan->duration)->toISOString()]; }
+    protected function doCreate(TelegramAccount $account, Plan $plan, ServiceProviderContext $context): ServiceProviderResult
+    {
+        return $this->result(ServiceProviderOperation::CREATE, $context, [
+            'account_id' => $account->getKey(),
+            'plan_id' => $plan->getKey(),
+            'capacity' => (int) $plan->capacity,
+            'status' => 'active',
+            'inbounds' => $context->inbounds,
+        ]);
+    }
 
-    public function extend(Service $service, int $days): array { return ['expires_at' => ($service->expires_at ?? now())->addDays($days)->toISOString()]; }
+    protected function doGet(Service $service, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::GET, $context, ['status' => $service->status, 'capacity' => (int) $service->capacity]); }
 
-    public function addCapacity(Service $service, int $capacity): array { return ['capacity' => (int) $service->capacity + $capacity]; }
+    protected function doRenew(Service $service, Plan $plan, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::RENEW, $context, ['status' => 'active', 'expires_at' => now()->addDays((int) $plan->duration)->toISOString()]); }
 
-    public function disable(Service $service): array { return ['status' => 'disabled']; }
+    protected function doExtend(Service $service, int $days, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::EXTEND, $context, ['expires_at' => ($service->expires_at ?? now())->addDays($days)->toISOString()]); }
 
-    public function delete(Service $service): array { return ['status' => 'deleted']; }
+    protected function doAddCapacity(Service $service, int $capacity, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::ADD_CAPACITY, $context, ['capacity' => (int) $service->capacity + $capacity]); }
 
-    public function status(Service $service): array { return ['status' => $service->status, 'capacity' => $service->capacity]; }
+    protected function doDisable(Service $service, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::DISABLE, $context, ['status' => 'disabled']); }
+
+    protected function doDelete(Service $service, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::DELETE, $context, ['status' => 'deleted']); }
+
+    protected function doStatus(Service $service, ServiceProviderContext $context): ServiceProviderResult
+    { return $this->result(ServiceProviderOperation::STATUS, $context, ['status' => $service->status, 'capacity' => (int) $service->capacity]); }
+
+    private function result(ServiceProviderOperation $operation, ServiceProviderContext $context, array $data): ServiceProviderResult
+    {
+        $key = $context->idempotencyKey;
+        $this->calls[] = ['operation' => $operation->value, 'key' => $key];
+
+        if ($key !== null && isset($this->idempotentResults[$key])) {
+            return $this->idempotentResults[$key];
+        }
+
+        if (isset($this->failures[$operation->value])) {
+            $message = $this->failures[$operation->value];
+            unset($this->failures[$operation->value]);
+            throw new ServiceProviderException($message, $operation, false, ['idempotency_key' => $key]);
+        }
+
+        $result = ServiceProviderResult::success(
+            $operation,
+            $data,
+            'fake-'.Str::uuid(),
+            $key,
+        );
+        if ($key !== null) {
+            $this->idempotentResults[$key] = $result;
+        }
+        return $result;
+    }
 }
