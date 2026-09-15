@@ -13,13 +13,3 @@ final readonly class PaymentRequest
         public array $metadata = [],
     ) {}
 }
-
-final readonly class PaymentResult
-{
-    public function __construct(
-        public string $status,
-        public ?string $authority = null,
-        public ?string $reference = null,
-        public array $metadata = [],
-    ) {}
-}
