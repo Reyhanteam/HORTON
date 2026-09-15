@@ -9,6 +9,7 @@ use App\DTOs\Sanaei\SanaeiRequest;
 use App\Exceptions\SanaeiApiException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 final class SanaeiHttpClient
 {
@@ -32,6 +33,8 @@ final class SanaeiHttpClient
         if ($token === '') {
             throw new SanaeiApiException('Sanaei API token is not configured.');
         }
+
+        self::validateBaseUrl($baseUrl);
 
         return new self(
             $baseUrl,
@@ -139,29 +142,55 @@ final class SanaeiHttpClient
 
     private function send(SanaeiRequest $request): SanaeiApiResponse
     {
+        $started = microtime(true);
+
         try {
             $pending = $this->requestBuilder();
             $response = $request->method === 'GET'
                 ? $pending->get($this->url($request->path))
                 : $pending->post($this->url($request->path), $request->payload);
         } catch (\Throwable $e) {
+            Log::warning('Sanaei API connection failure', [
+                'operation' => $request->operation,
+                'latency_ms' => $this->latency($started),
+                'exception' => $e::class,
+            ]);
             throw new SanaeiApiException($request->operation.'. connection failed.', null, null, true, $e);
         }
 
         $body = $response->json();
         if (! is_array($body)) {
+            Log::warning('Sanaei API returned an invalid response', [
+                'operation' => $request->operation,
+                'status' => $response->status(),
+                'latency_ms' => $this->latency($started),
+            ]);
             throw new SanaeiApiException($request->operation.' returned an invalid response.', $response->status());
         }
 
         $apiResponse = SanaeiApiResponse::from($response->status(), $body, $response->headers());
 
         if ($response->status() === 429 || $response->serverError()) {
+            Log::warning('Sanaei API returned a retryable error', [
+                'operation' => $request->operation,
+                'status' => $response->status(),
+                'latency_ms' => $this->latency($started),
+            ]);
+
             throw new SanaeiApiException(
                 $request->operation.' failed with a retryable HTTP error.',
                 $response->status(),
                 $apiResponse->message,
                 true,
             );
+        }
+
+        if ($response->failed()) {
+            Log::warning('Sanaei API returned an HTTP error', [
+                'operation' => $request->operation,
+                'status' => $response->status(),
+                'latency_ms' => $this->latency($started),
+            ]);
         }
 
         return $apiResponse;
@@ -184,5 +213,43 @@ final class SanaeiHttpClient
     private function url(string $path): string
     {
         return $this->baseUrl.'/'.ltrim($path, '/');
+    }
+
+    private static function validateBaseUrl(string $baseUrl): void
+    {
+        $parts = parse_url($baseUrl);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            throw new SanaeiApiException('Sanaei base URL must be a valid HTTP(S) URL.');
+        }
+
+        $allowPrivate = (bool) config('horton.providers.sanaei.allow_private_urls', false);
+        if ($allowPrivate) {
+            return;
+        }
+
+        if (self::isBlockedHost($host)) {
+            throw new SanaeiApiException('Sanaei base URL points to a blocked private or local destination.');
+        }
+    }
+
+    private static function isBlockedHost(string $host): bool
+    {
+        if (in_array($host, ['localhost', 'localhost.localdomain', 'metadata.google.internal'], true)) {
+            return true;
+        }
+
+        if (! filter_var($host, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        return ! filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+    }
+
+    private function latency(float $started): int
+    {
+        return (int) round((microtime(true) - $started) * 1000);
     }
 }
