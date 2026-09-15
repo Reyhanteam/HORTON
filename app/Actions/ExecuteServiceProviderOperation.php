@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\ServiceOperation;
 use App\Services\Providers\ServiceProviderFactory;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -41,6 +42,11 @@ final class ExecuteServiceProviderOperation
         $operationRecord = $this->claimOperation($service, $operation, $key, $plan, $value);
 
         if ($operationRecord->status === 'completed') {
+            return $service->fresh();
+        }
+
+        $lock = Cache::lock('horton:service-operation:'.$key, 600);
+        if (! $lock->get()) {
             return $service->fresh();
         }
 
@@ -81,6 +87,8 @@ final class ExecuteServiceProviderOperation
                 'error_message' => $e->getMessage(),
             ]);
             throw $e;
+        } finally {
+            $lock->release();
         }
 
         return $service->fresh();
@@ -135,7 +143,8 @@ final class ExecuteServiceProviderOperation
 
     private function applyResult(Service $service, ServiceProviderOperation $operation, array $data): void
     {
-        $updates = ['metadata' => [...($service->metadata ?? []), 'last_provider_result' => $data]];
+        $metadata = [...($service->metadata ?? []), 'last_provider_result' => $data];
+        $updates = ['metadata' => $metadata];
 
         if (isset($data['capacity']) && is_numeric($data['capacity'])) {
             $updates['capacity'] = (int) $data['capacity'];
